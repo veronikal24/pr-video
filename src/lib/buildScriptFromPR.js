@@ -1,37 +1,13 @@
-const SKIP_PATTERNS = /^(fix|chore|docs|test|ci|build)(\(|:|\s)/i
+import {
+  fileDisplayName,
+  isComponentFile,
+  isUIFile,
+  pickHighlightLines,
+  summarizePatch,
+} from './prFiles'
+import { prepareComponentPreview } from './prepareComponentPreview'
 
-function splitBody(body) {
-  return body
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-}
-
-function pickSlideSources(pr) {
-  const lines = splitBody(pr.body)
-  const bullets = lines
-    .filter((line) => /^[-*•]\s+/.test(line))
-    .map((line) => line.replace(/^[-*•]\s+/, '').trim())
-
-  if (bullets.length >= 2) return bullets.slice(0, 5)
-
-  const paragraphs = lines.filter((line) => line.length > 24 && !/^[-*•]/.test(line))
-  if (paragraphs.length >= 1) return paragraphs.slice(0, 4)
-
-  return [pr.title]
-}
-
-function headlineFrom(text) {
-  const words = text.split(/\s+/)
-  if (words.length <= 8) return text
-  return words.slice(0, 8).join(' ')
-}
-
-function bodyFrom(text, headline) {
-  if (text.length <= headline.length + 3) return ''
-  const rest = text.slice(headline.length).trim().replace(/^[-–—:]\s*/, '')
-  return rest.length > 120 ? `${rest.slice(0, 117)}...` : rest
-}
+const SKIP_TITLE_PATTERNS = /^(fix|chore|docs|test|ci|build)(\(|:|\s)/i
 
 function inferTone(pr) {
   if (/feat|add|new|launch|ship/i.test(pr.title)) return 'celebratory'
@@ -40,34 +16,19 @@ function inferTone(pr) {
   return 'informational'
 }
 
-function inferConfidence(pr) {
-  if (SKIP_PATTERNS.test(pr.title)) return 0.25
-  if (/feat|add|new|launch/i.test(pr.title)) return 0.75
-  if (/fix|chore|docs/i.test(pr.title)) return 0.3
-  return 0.55
+function inferConfidence(pr, componentCount) {
+  if (SKIP_TITLE_PATTERNS.test(pr.title)) return 0.25
+  if (componentCount > 0) return 0.88
+  if (/feat|add|new|launch/i.test(pr.title)) return 0.65
+  return 0.4
 }
 
-function inferSkipReason(confidence, pr) {
+function inferSkipReason(confidence, componentCount) {
   if (confidence >= 0.4) return null
-  if (/^fix/i.test(pr.title)) return 'Looks like a bugfix — may not be worth promoting'
-  if (/^chore/i.test(pr.title)) return 'Chore PR — low marketing value'
-  if (/^docs/i.test(pr.title)) return 'Documentation change — limited video appeal'
-  return 'Low-signal PR title — review before sharing'
-}
-
-function buildSlides(pr) {
-  const sources = pickSlideSources(pr)
-  const tags = ['Update', 'Detail', 'Impact', 'Context', 'Next']
-
-  return sources.map((text, i) => {
-    const headline = headlineFrom(text)
-    return {
-      id: `s${i + 1}`,
-      tag: tags[i] ?? 'Detail',
-      headline,
-      body: bodyFrom(text, headline) || text.slice(0, 100),
-    }
-  })
+  if (componentCount === 0) {
+    return 'No React component files changed in this PR'
+  }
+  return 'Low-signal PR — review before sharing'
 }
 
 function buildHashtags(pr) {
@@ -78,18 +39,107 @@ function buildHashtags(pr) {
   return [...new Set(tags.filter(Boolean))].slice(0, 4)
 }
 
-export function buildScriptFromPR(pr) {
-  const confidence = inferConfidence(pr)
-  const slides = buildSlides(pr)
+function slideFromComponent(comp, index) {
+  const prepared = prepareComponentPreview(comp.source, comp.filename)
+  const name = fileDisplayName(comp.filename)
+
+  return {
+    id: `component-${index}`,
+    tag: comp.status === 'added' ? 'New component' : 'Updated component',
+    headline: name,
+    body: `${comp.filename} · ${summarizePatch(comp.patch)}`,
+    visual: {
+      type: 'component-preview',
+      filename: comp.filename,
+      previewCode: prepared.previewCode,
+      canPreview: prepared.canPreview,
+      componentName: prepared.componentName,
+      previewError: prepared.error,
+      highlightLines: pickHighlightLines(comp.patch),
+      status: comp.status,
+      patch: comp.patch,
+    },
+  }
+}
+
+function slideFromFile(file, index) {
+  const name = fileDisplayName(file.filename)
+
+  return {
+    id: `change-${index}`,
+    tag: file.status === 'added' ? 'New' : file.status === 'removed' ? 'Removed' : 'Changed',
+    headline: name,
+    body: `${file.filename} · ${summarizePatch(file.patch)}`,
+    visual: {
+      type: 'code-change',
+      filename: file.filename,
+      patch: file.patch,
+      status: file.status,
+      highlightLines: pickHighlightLines(file.patch),
+      isComponent: isComponentFile(file.filename),
+    },
+  }
+}
+
+function buildSlides(pr, componentSources) {
+  const slides = []
+  const loadedComponents = componentSources.filter((c) => c.source)
+  const uiFiles = (pr.files ?? []).filter((f) => isUIFile(f.filename))
+  const nonComponentUi = uiFiles.filter((f) => !isComponentFile(f.filename)).slice(0, 2)
+
+  slides.push({
+    id: 'hero',
+    tag: 'Release',
+    headline: pr.title,
+    body: `PR #${pr.number} by @${pr.author} · ${pr.repo}`,
+    visual: { type: 'hero' },
+  })
+
+  for (const [i, comp] of loadedComponents.entries()) {
+    slides.push(slideFromComponent(comp, i))
+  }
+
+  for (const [i, file] of nonComponentUi.entries()) {
+    slides.push(slideFromFile(file, i))
+  }
+
+  if (slides.length === 1) {
+    slides.push({
+      id: 'fallback',
+      tag: 'Note',
+      headline: 'No React components in this PR',
+      body: 'This PR has no .tsx/.jsx changes to render.',
+      visual: {
+        type: 'code-change',
+        filename: pr.url,
+        patch: null,
+        status: 'modified',
+        highlightLines: [],
+      },
+    })
+  }
+
+  return slides
+}
+
+export function buildScriptFromPR(pr, { componentSources = [] } = {}) {
+  const uiFiles = (pr.files ?? []).filter(isUIFile)
+  const loadedComponents = componentSources.filter((c) => c.source)
+  const confidence = inferConfidence(pr, loadedComponents.length)
+  const slides = buildSlides(pr, componentSources)
   const tone = inferTone(pr)
 
   return {
     hook: pr.title,
     slides,
-    caption: `${pr.title} — fresh from ${pr.repo} by @${pr.author}`,
+    componentSources,
+    changedFiles: pr.files ?? [],
+    uiFileCount: uiFiles.length,
+    componentCount: loadedComponents.length,
+    caption: `${pr.title} — ${pr.repo} PR #${pr.number} by @${pr.author}`,
     hashtags: buildHashtags(pr),
     tone,
     confidence,
-    skip_reason: inferSkipReason(confidence, pr),
+    skip_reason: inferSkipReason(confidence, loadedComponents.length),
   }
 }

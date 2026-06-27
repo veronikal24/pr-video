@@ -5,6 +5,63 @@ import {
   useCurrentFrame,
 } from 'remotion'
 import { SLIDE_DURATION_FRAMES } from './constants'
+import { SlideVisual } from './visuals/SlideVisual'
+
+function CaptionBar({ slide, repo, prNumber }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        padding: '28px 56px 32px',
+        background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 20,
+          fontWeight: 600,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: '#afa9ec',
+          marginBottom: 10,
+        }}
+      >
+        {slide.tag}
+      </div>
+      <div
+        style={{
+          fontSize: 40,
+          fontWeight: 700,
+          color: '#fff',
+          lineHeight: 1.15,
+          marginBottom: 8,
+        }}
+      >
+        {slide.headline}
+      </div>
+      {slide.body && (
+        <div style={{ fontSize: 22, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>
+          {slide.body}
+        </div>
+      )}
+      {repo && (
+        <div
+          style={{
+            marginTop: 14,
+            fontSize: 16,
+            color: 'rgba(255,255,255,0.35)',
+            letterSpacing: '0.04em',
+          }}
+        >
+          {repo} · PR #{prNumber}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SlideContent({ slide, repo, prNumber, frame }) {
   const fadeIn = interpolate(frame, [0, 15], [0, 1], {
@@ -18,85 +75,50 @@ function SlideContent({ slide, repo, prNumber, frame }) {
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   )
   const opacity = Math.min(fadeIn, fadeOut)
-  const translateY = interpolate(frame, [0, 20], [24, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  })
+  const visual = slide.visual ?? { type: 'code-change' }
 
-  return (
-    <AbsoluteFill
-      style={{
-        background: 'linear-gradient(160deg, #0b0c10 0%, #12141c 55%, #1a1630 100%)',
-        opacity,
-        transform: `translateY(${translateY}px)`,
-      }}
-    >
+  if (visual.type === 'hero') {
+    return (
       <AbsoluteFill
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 96,
-          textAlign: 'center',
+          opacity,
+          background: 'linear-gradient(160deg, #0b0c10 0%, #12141c 55%, #1a1630 100%)',
+          padding: 72,
         }}
       >
-        <div
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            padding: '8px 20px',
-            borderRadius: 999,
-            background: 'rgba(127, 119, 221, 0.2)',
-            color: '#afa9ec',
-            border: '1px solid rgba(127, 119, 221, 0.45)',
-            marginBottom: 40,
-          }}
-        >
-          {slide.tag}
-        </div>
-        <h2
-          style={{
-            fontSize: 64,
-            fontWeight: 700,
-            lineHeight: 1.15,
-            letterSpacing: '-0.02em',
-            color: '#fff',
-            marginBottom: 28,
-            maxWidth: '85%',
-          }}
-        >
-          {slide.headline}
-        </h2>
-        <p
-          style={{
-            fontSize: 32,
-            lineHeight: 1.55,
-            color: 'rgba(255,255,255,0.68)',
-            maxWidth: '78%',
-          }}
-        >
-          {slide.body}
-        </p>
+        <SlideVisual slide={slide} repo={repo} size="lg" />
       </AbsoluteFill>
-      {repo && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 36,
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            fontSize: 20,
-            color: 'rgba(255,255,255,0.28)',
-            letterSpacing: '0.04em',
-          }}
-        >
-          {repo} · PR #{prNumber}
-        </div>
-      )}
+    )
+  }
+
+  if (visual.type === 'live-preview') {
+    return (
+      <AbsoluteFill style={{ opacity, background: '#0b0c10' }}>
+        <AbsoluteFill style={{ padding: 32 }}>
+          <SlideVisual slide={slide} repo={repo} size="lg" />
+        </AbsoluteFill>
+        <CaptionBar slide={slide} repo={repo} prNumber={prNumber} />
+      </AbsoluteFill>
+    )
+  }
+
+  if (visual.type === 'image') {
+    return (
+      <AbsoluteFill style={{ opacity, background: '#0b0c10' }}>
+        <AbsoluteFill style={{ padding: 40 }}>
+          <SlideVisual slide={slide} repo={repo} size="lg" />
+        </AbsoluteFill>
+        <CaptionBar slide={slide} repo={repo} prNumber={prNumber} />
+      </AbsoluteFill>
+    )
+  }
+
+  return (
+    <AbsoluteFill style={{ opacity, background: '#0b0c10' }}>
+      <AbsoluteFill style={{ padding: '40px 48px 200px' }}>
+        <SlideVisual slide={slide} repo={repo} size="lg" />
+      </AbsoluteFill>
+      <CaptionBar slide={slide} repo={repo} prNumber={prNumber} />
     </AbsoluteFill>
   )
 }

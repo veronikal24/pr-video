@@ -24,14 +24,14 @@ export default function App() {
 
       {view === 'input' && (
         <RepoInput
-          onFetched={(pr) => {
-            setPrData(pr)
+          onFetched={({ pr, script: builtScript }) => {
+            setPrData({ pr, script: builtScript })
             setView('review')
           }}
         />
       )}
 
-      {view === 'review' && (
+      {view === 'review' && prData && (
         <ScriptReview
           prData={prData}
           onApproved={(approvedScript) => {
@@ -41,7 +41,7 @@ export default function App() {
         />
       )}
 
-      {view === 'video' && (
+      {view === 'video' && script && (
         <VideoPlayer script={script} />
       )}
     </div>
