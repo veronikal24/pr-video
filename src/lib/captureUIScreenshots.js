@@ -42,6 +42,22 @@ export async function captureUIScreenshots(pr) {
     }
 
     if (!apiUp) {
+      if (previewUrl) {
+        try {
+          const { appUrl, screenshots } = await captureAppScreenshots(previewUrl)
+          if (screenshots?.length) {
+            return {
+              screenshots,
+              captureMode: 'preview-remote',
+              appUrl,
+              jobId: null,
+              error: null,
+            }
+          }
+        } catch {
+          // fall through to error below
+        }
+      }
       return {
         screenshots: [],
         captureMode: null,

@@ -4,7 +4,7 @@ import { LiveContext, LivePreview, LiveProvider } from 'react-live'
 
 import { liveScope } from '../../lib/liveScope.jsx'
 
-import { CodeChangeVisual } from './CodeChangeVisual'
+import { CodeChangeVisual } from './CodeChangeVisual.jsx'
 
 
 

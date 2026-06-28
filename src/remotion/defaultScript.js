@@ -1,4 +1,4 @@
-import { applySlideDurations, computePrMetrics } from './constants'
+import { applySlideDurations, computePrMetrics } from './constants.js'
 
 const prMetrics = computePrMetrics({ files: [{ additions: 24, deletions: 8 }] })
 

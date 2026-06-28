@@ -1,12 +1,12 @@
 import { Composition } from 'remotion'
-import { PRVideo } from './PRVideo'
-import { defaultScript } from './defaultScript'
+import { PRVideo } from './PRVideo.jsx'
+import { defaultScript } from './defaultScript.js'
 import {
   COMPOSITION_HEIGHT,
   COMPOSITION_WIDTH,
   getVideoDurationInFrames,
   PR_VIDEO_FPS,
-} from './constants'
+} from './constants.js'
 
 export function RemotionRoot() {
   const durationInFrames = getVideoDurationInFrames(defaultScript.slides)

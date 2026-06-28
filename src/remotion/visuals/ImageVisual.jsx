@@ -1,10 +1,14 @@
-import { Img } from 'remotion'
+import { Img, interpolate, spring } from 'remotion'
 
 const CHROME_HEIGHT = { sm: 36, lg: 52 }
+const FPS = 30
 
-function BrowserChrome({ children, size = 'sm' }) {
+function BrowserChrome({ children, size = 'sm', frame = 0, animated = false }) {
   const chromeH = CHROME_HEIGHT[size] ?? CHROME_HEIGHT.sm
   const dotSize = size === 'lg' ? 14 : 10
+  const enter = animated
+    ? spring({ frame, fps: FPS, config: { damping: 16, stiffness: 90 } })
+    : 1
 
   return (
     <div
@@ -18,6 +22,8 @@ function BrowserChrome({ children, size = 'sm' }) {
         display: 'flex',
         flexDirection: 'column',
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        opacity: enter,
+        transform: animated ? `scale(${interpolate(enter, [0, 1], [0.94, 1])})` : undefined,
       }}
     >
       <div
@@ -49,17 +55,34 @@ function BrowserChrome({ children, size = 'sm' }) {
           }}
         />
       </div>
-      <div style={{ flex: 1, position: 'relative', background: '#0b0c10', minHeight: 0 }}>
+      <div style={{ flex: 1, position: 'relative', background: '#0b0c10', minHeight: 0, overflow: 'hidden' }}>
         {children}
       </div>
     </div>
   )
 }
 
-export function ImageVisual({ imageUrl, alt, size = 'sm' }) {
+export function ImageVisual({
+  imageUrl,
+  alt,
+  size = 'sm',
+  frame = 0,
+  durationFrames = 150,
+  animated = false,
+}) {
+  const scale = animated
+    ? interpolate(frame, [0, durationFrames], [1, 1.05], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      })
+    : 1
+  const imgOpacity = animated
+    ? spring({ frame: frame - 5, fps: FPS, config: { damping: 20, stiffness: 80 } })
+    : 1
+
   if (!imageUrl) {
     return (
-      <BrowserChrome size={size}>
+      <BrowserChrome size={size} frame={frame} animated={animated}>
         <div
           style={{
             position: 'absolute',
@@ -78,7 +101,7 @@ export function ImageVisual({ imageUrl, alt, size = 'sm' }) {
   }
 
   return (
-    <BrowserChrome size={size}>
+    <BrowserChrome size={size} frame={frame} animated={animated}>
       <Img
         src={imageUrl}
         alt={alt ?? 'Feature screenshot'}
@@ -89,6 +112,9 @@ export function ImageVisual({ imageUrl, alt, size = 'sm' }) {
           height: '100%',
           objectFit: 'cover',
           objectPosition: 'top center',
+          opacity: Math.max(0, imgOpacity),
+          transform: animated ? `scale(${scale})` : undefined,
+          transformOrigin: 'top center',
         }}
       />
     </BrowserChrome>

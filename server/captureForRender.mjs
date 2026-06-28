@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto'
 import { screenshotUrl } from './screenshotUrl.mjs'
-import { hostAndCapture } from './hostAndCapture.mjs'
 
 export function getCaptureMeta(script) {
   const pr = script?.pr
@@ -20,75 +19,59 @@ export function getCaptureMeta(script) {
   }
 }
 
+/**
+ * Fast preview screenshot only — never clone/build during export (too slow and brittle).
+ */
 export async function captureScreenshotsForRender(script) {
   const meta = getCaptureMeta(script)
-  if (!meta) {
-    return { screenshots: [], appUrl: null, captureMode: null, error: 'Missing PR metadata for capture' }
-  }
+  const previewUrl = meta?.previewUrl ?? script.appUrl ?? null
 
-  if (meta.previewUrl) {
-    try {
-      console.log('[captureForRender] Screenshot deploy preview:', meta.previewUrl)
-      const jobId = randomUUID()
-      const result = await screenshotUrl(meta.previewUrl, jobId)
-      if (result.screenshots?.length) {
-        return {
-          screenshots: result.screenshots,
-          appUrl: result.appUrl ?? meta.previewUrl,
-          captureMode: 'preview',
-          jobId: result.jobId ?? jobId,
-          error: null,
-        }
-      }
-    } catch (err) {
-      console.warn('[captureForRender] Preview screenshot failed:', err.message)
+  if (!previewUrl) {
+    return {
+      screenshots: [],
+      appUrl: null,
+      captureMode: null,
+      error: 'No deploy preview URL on this PR',
     }
   }
 
-  if (meta.headRef && meta.prNumber) {
-    try {
-      console.log('[captureForRender] Clone and build:', `${meta.owner}/${meta.repoName}@${meta.headRef}`)
-      const result = await hostAndCapture({
-        owner: meta.owner,
-        repoName: meta.repoName,
-        headRef: meta.headRef,
-        prNumber: meta.prNumber,
-        mode: 'auto',
-      })
-      if (result.screenshots?.length) {
-        return {
-          screenshots: result.screenshots,
-          appUrl: result.appUrl,
-          captureMode: result.captureMode ?? 'local-build',
-          jobId: result.jobId,
-          error: null,
-        }
+  try {
+    console.log('[captureForRender] Screenshot deploy preview:', previewUrl)
+    const jobId = randomUUID()
+    const result = await screenshotUrl(previewUrl, jobId)
+    if (result.screenshots?.length) {
+      return {
+        screenshots: result.screenshots,
+        appUrl: result.appUrl ?? previewUrl,
+        captureMode: 'preview',
+        jobId: result.jobId ?? jobId,
+        error: null,
       }
-    } catch (err) {
-      console.warn('[captureForRender] Local build capture failed:', err.message)
-      return { screenshots: [], appUrl: meta.previewUrl, captureMode: null, error: err.message }
+    }
+  } catch (err) {
+    console.warn('[captureForRender] Preview screenshot failed:', err.message)
+    return {
+      screenshots: [],
+      appUrl: previewUrl,
+      captureMode: null,
+      error: err.message,
     }
   }
 
   return {
     screenshots: [],
-    appUrl: meta.previewUrl,
+    appUrl: previewUrl,
     captureMode: null,
-    error: meta.previewUrl
-      ? 'Preview screenshot failed and local build metadata was incomplete'
-      : 'No deploy preview URL and no branch ref to build locally',
+    error: 'Preview screenshot returned no images',
   }
 }
 
-function slideHasLoadableScreenshot(slide, apiPort) {
-  const visual = slide.visual
-  if (visual?.type !== 'app-screenshot' && visual?.type !== 'image') return false
-  if (visual.filePath || visual.imageUrl) return true
-  return false
-}
-
 export function scriptHasScreenshotSlides(script) {
-  return (script.slides ?? []).some((slide) => slideHasLoadableScreenshot(slide))
+  return (script.slides ?? []).some((slide) => {
+    const visual = slide.visual
+    if (visual?.type !== 'app-screenshot' && visual?.type !== 'image') return false
+    return Boolean(visual.filePath || visual.imageUrl)
+  })
 }
 
 export function createScreenshotSlides(screenshots, appUrl) {
@@ -144,4 +127,11 @@ export function filterToUiSlides(slides) {
       type === 'image'
     )
   })
+}
+
+export function shouldAttemptRenderCapture(script) {
+  if (scriptHasScreenshotSlides(script)) return false
+  if (script.hasScreenshots) return false
+  const previewUrl = script.appUrl ?? script.pr?.previewUrl
+  return Boolean(previewUrl)
 }

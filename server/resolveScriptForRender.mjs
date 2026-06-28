@@ -1,5 +1,3 @@
-import { pathToFileURL } from 'url'
-
 export function resolveScriptForRender(script, apiPort = 4174) {
   if (!script?.slides?.length) return script
 
@@ -12,14 +10,14 @@ export function resolveScriptForRender(script, apiPort = 4174) {
       }
 
       let imageUrl = visual.imageUrl
-      if (visual.filePath) {
-        imageUrl = pathToFileURL(visual.filePath).href
-      } else if (
-        imageUrl &&
-        !/^https?:\/\//i.test(imageUrl) &&
-        !imageUrl.startsWith('file://')
-      ) {
-        imageUrl = `http://127.0.0.1:${apiPort}${imageUrl}`
+
+      if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+        return { ...slide, visual: { ...visual, imageUrl } }
+      }
+
+      const capturesPath = resolveCapturesHttpUrl(visual, apiPort)
+      if (capturesPath) {
+        imageUrl = capturesPath
       }
 
       return {
@@ -28,4 +26,20 @@ export function resolveScriptForRender(script, apiPort = 4174) {
       }
     }),
   }
+}
+
+function resolveCapturesHttpUrl(visual, apiPort) {
+  if (visual.imageUrl?.startsWith('/captures/')) {
+    return `http://127.0.0.1:${apiPort}${visual.imageUrl}`
+  }
+
+  if (visual.filePath) {
+    const normalized = visual.filePath.replace(/\\/g, '/')
+    const match = normalized.match(/[/\\]captures[/\\](.+)$/)
+    if (match) {
+      return `http://127.0.0.1:${apiPort}/captures/${match[1]}`
+    }
+  }
+
+  return null
 }

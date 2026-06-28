@@ -3,7 +3,7 @@ import { join } from 'path'
 import { chromium } from 'playwright'
 import { RENDER_HEIGHT, RENDER_WIDTH } from './renderConstants.mjs'
 
-export async function recordAppClip(appUrl, outputDir, durationSec = 10) {
+export async function recordAppClip(appUrl, outputDir, durationSec = 8) {
   await mkdir(outputDir, { recursive: true })
 
   const browser = await chromium.launch({ headless: true })
@@ -17,8 +17,8 @@ export async function recordAppClip(appUrl, outputDir, durationSec = 10) {
 
   try {
     const page = await context.newPage()
-    await page.goto(appUrl, { waitUntil: 'load', timeout: 120000 })
-    await page.waitForTimeout(Math.max(durationSec, 5) * 1000)
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 })
+    await page.waitForTimeout(Math.min(Math.max(durationSec, 4), 10) * 1000)
   } finally {
     await context.close()
     await browser.close()

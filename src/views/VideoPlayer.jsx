@@ -79,8 +79,7 @@ export default function VideoPlayer({ script }) {
 
         {!exportUrl && !exporting && (
           <p className="render-hint">
-            Export captures live app UI (deploy preview or local build) as video, plus title slides.
-            {script.captureError && ' UI capture failed during generation — export will retry.'}
+            Export renders an animated Remotion video — app screenshots plus code diffs from the PR.
           </p>
         )}
       </div>

@@ -82,7 +82,15 @@ function slidesFromScreenshots(screenshots, appUrl) {
   }))
 }
 
-function slideFromComponent(comp, index, injectedCss) {
+function slideFromComponent(comp, index, injectedCss, useCodeDiff) {
+  if (useCodeDiff) {
+    return slideFromCodeFile(
+      comp,
+      index,
+      comp.status === 'added' ? 'New component' : 'Updated component'
+    )
+  }
+
   const prepared = prepareComponentPreview(comp.source, comp.filename)
   const name = fileDisplayName(comp.filename)
 
@@ -165,19 +173,16 @@ function buildSlides(
     slides.push(...slidesFromScreenshots(screenshots, appUrl))
   }
 
+  const useCodeDiff = screenshots.length > 0
   const injectedCss = buildInjectedCss(styleSources)
 
   const components = componentSources.slice(0, MAX_COMPONENT_SLIDES)
   for (const [i, comp] of components.entries()) {
-    if (comp.source) {
-      slides.push(slideFromComponent(comp, i, injectedCss))
+    if (comp.source && !useCodeDiff) {
+      slides.push(slideFromComponent(comp, i, injectedCss, false))
     } else {
       slides.push(
-        slideFromCodeFile(
-          comp,
-          i,
-          comp.status === 'added' ? 'New component' : 'Component change'
-        )
+        slideFromComponent(comp, i, injectedCss, true)
       )
     }
   }
@@ -272,7 +277,7 @@ export function buildScriptFromPR(
     captureJobId,
     captureError,
     hasScreenshots,
-    appUrl: capture.appUrl ?? appUrl ?? null,
+    appUrl: appUrl ?? pr.previewUrl ?? null,
     caption: `${pr.title} — ${pr.repo} PR #${pr.number} by @${pr.author}`,
     hashtags: buildHashtags(pr),
     tone,

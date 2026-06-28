@@ -6,7 +6,7 @@ import {
   captureScreenshotsForRender,
   filterToUiSlides,
   injectScreenshotSlides,
-  scriptHasScreenshotSlides,
+  shouldAttemptRenderCapture,
 } from './captureForRender.mjs'
 
 function resolveImagePath(visual) {
@@ -36,7 +36,7 @@ async function loadImageAsDataUrl(visual, apiPort) {
 
   if (fetchUrl?.startsWith('http')) {
     try {
-      const res = await fetch(fetchUrl)
+      const res = await fetch(fetchUrl, { signal: AbortSignal.timeout(30000) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const buf = Buffer.from(await res.arrayBuffer())
       const mime = res.headers.get('content-type') ?? 'image/png'
@@ -73,6 +73,8 @@ async function embedImagesInSlides(slides, apiPort) {
       if (dataUrl) {
         nextVisual = { ...visual, embeddedImage: dataUrl }
       }
+    } else if (visual.type === 'component-preview' && primaryDataUrl) {
+      nextVisual = { ...visual, embeddedImage: primaryDataUrl, useScreenshot: true }
     }
 
     preparedSlides.push({ ...slide, visual: nextVisual })
@@ -82,33 +84,40 @@ async function embedImagesInSlides(slides, apiPort) {
 }
 
 export async function prepareScriptForCapture(script, apiPort) {
+  const originalSlides = script.slides ?? []
   let working = resolveScriptForRender(script, apiPort)
 
-  const hasSlides = scriptHasScreenshotSlides(working)
-  if (!hasSlides) {
-    console.log('[render] No screenshot slides in script — capturing app UI now…')
+  if (shouldAttemptRenderCapture(working)) {
+    console.log('[render] Trying fast preview screenshot…')
     const captureResult = await captureScreenshotsForRender(working)
     if (captureResult.screenshots?.length) {
       working = injectScreenshotSlides(working, captureResult)
       working.appUrl = captureResult.appUrl ?? working.appUrl
-      console.log('[render] Render-time capture succeeded:', captureResult.captureMode)
+      console.log('[render] Preview screenshot captured')
     } else {
-      console.warn('[render] Render-time capture failed:', captureResult.error)
-      working.appUrl = captureResult.appUrl ?? working.appUrl
+      console.warn('[render] Preview screenshot failed:', captureResult.error)
     }
   }
 
   let { slides, primaryDataUrl } = await embedImagesInSlides(working.slides ?? [], apiPort)
 
   if (primaryDataUrl) {
-    slides = filterToUiSlides(slides)
-    console.log(`[render] UI-only mode: ${slides.length} slide(s), code slides removed`)
+    const uiSlides = filterToUiSlides(slides)
+    if (uiSlides.length > 0) {
+      slides = uiSlides
+      console.log(`[render] UI mode: ${slides.length} slide(s)`)
+    }
+  }
+
+  if (!slides.length) {
+    slides = originalSlides
   }
 
   return {
     ...working,
     slides,
-    appUrl: working.appUrl ?? null,
+    appUrl: primaryDataUrl ? (working.appUrl ?? null) : null,
+    verifiedAppUrl: primaryDataUrl ? (working.appUrl ?? null) : null,
     hasEmbeddedScreenshots: Boolean(primaryDataUrl),
     renderCaptureError: primaryDataUrl ? null : working.captureError,
   }
