@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:4174',
+      '/renders': 'http://127.0.0.1:4174',
       '/captures': 'http://127.0.0.1:4174',
     },
   },

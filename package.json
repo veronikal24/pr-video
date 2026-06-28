@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/run-dev.mjs",
     "dev:ui": "vite",
+    "dev:all": "node server/run-dev.mjs",
     "server": "node server/index.mjs",
     "postinstall": "playwright install chromium",
     "build": "vite build",

@@ -1,4 +1,5 @@
 import { transform } from '@babel/standalone'
+import { generateImportStubs } from './importStubs'
 
 function extractComponentName(source) {
   const patterns = [
@@ -24,6 +25,7 @@ function stripForPreview(source) {
     .replace(/^import\s+[\s\S]*?from\s+['"].*?['"];?\s*$/gm, '')
     .replace(/^import\s+['"].*?['"];?\s*$/gm, '')
     .replace(/^export\s+default\s+/, '')
+    .replace(/^export\s+(?=function|const|class)/gm, '')
     .replace(/^'use client';?\s*$/gm, '')
     .replace(/^"use client";?\s*$/gm, '')
     .trim()
@@ -35,15 +37,19 @@ export function prepareComponentPreview(source, filename) {
   }
 
   const componentName = extractComponentName(source)
+  const stubs = generateImportStubs(source, componentName)
   const stripped = stripForPreview(source)
+  const previewSource = [stubs, stripped].filter(Boolean).join('\n\n')
 
   try {
-    const transformed = transform(stripped, {
+    const transformed = transform(previewSource, {
       presets: ['react', 'typescript'],
       filename,
     }).code
 
-    const previewCode = `${transformed}\nrender(<${componentName} />);`
+    const previewCode = `${transformed}
+const __previewProps = {};
+render(<${componentName} {...__previewProps} />);`
 
     return { previewCode, componentName, canPreview: true, error: null }
   } catch (err) {

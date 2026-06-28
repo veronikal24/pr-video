@@ -4,8 +4,9 @@ import { fileURLToPath } from 'url'
 import { sessions } from './sessions.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(__dirname, '..')
+export const ROOT = join(__dirname, '..')
 export const CAPTURES_DIR = join(ROOT, '.tmp', 'captures')
+export const RENDERS_DIR = join(ROOT, '.tmp', 'renders')
 
 export async function ensureCapturesDir() {
   await mkdir(CAPTURES_DIR, { recursive: true })

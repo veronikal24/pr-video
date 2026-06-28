@@ -41,9 +41,7 @@ export default function App() {
         />
       )}
 
-      {view === 'video' && script && (
-        <VideoPlayer script={script} />
-      )}
+      {view === 'video' && script && <VideoPlayer script={script} />}
     </div>
   )
 }

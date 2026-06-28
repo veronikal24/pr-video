@@ -114,19 +114,155 @@ export function installCommand(pm) {
   }
 }
 
+function isNextScript(script = '') {
+  return /\bnext\b/.test(script)
+}
+
+function commonServerEnv(port) {
+  return {
+    PORT: String(port),
+    HOST: '127.0.0.1',
+    HOSTNAME: '127.0.0.1',
+    BROWSER: 'none',
+    CI: 'true',
+  }
+}
+
+export function buildCommand(pm, pkg) {
+  if (!pkg.scripts?.build) {
+    throw new Error('No build script in package.json')
+  }
+
+  switch (pm) {
+    case 'pnpm':
+      return { command: 'pnpm', args: ['run', 'build'] }
+    case 'yarn':
+      return { command: 'yarn', args: ['build'] }
+    case 'bun':
+      return { command: 'bun', args: ['run', 'build'] }
+    default:
+      return { command: 'npm', args: ['run', 'build'] }
+  }
+}
+
+function previewCommand(pm, pkg, port) {
+  const previewScript = pkg.scripts?.preview ?? ''
+  const viteLike = /vite|astro/.test(previewScript)
+  const nextLike = isNextScript(previewScript)
+
+  let extraArgs = []
+  if (viteLike) {
+    extraArgs = ['--', '--host', '127.0.0.1', '--port', String(port)]
+  } else if (nextLike) {
+    extraArgs = ['--', '-p', String(port), '-H', '127.0.0.1']
+  }
+
+  const env = nextLike || !viteLike ? commonServerEnv(port) : {}
+
+  switch (pm) {
+    case 'pnpm':
+      return { command: 'pnpm', args: ['run', 'preview', ...extraArgs], env }
+    case 'yarn':
+      return viteLike
+        ? { command: 'yarn', args: ['preview', '--host', '127.0.0.1', '--port', String(port)], env }
+        : { command: 'yarn', args: ['preview', ...extraArgs.slice(1)], env }
+    case 'bun':
+      return { command: 'bun', args: ['run', 'preview', ...extraArgs], env }
+    default:
+      return { command: 'npm', args: ['run', 'preview', ...extraArgs], env }
+  }
+}
+
+function startCommand(pm, pkg, port) {
+  const startScript = pkg.scripts?.start ?? ''
+  const nextLike = isNextScript(startScript)
+  const env = commonServerEnv(port)
+
+  let extraArgs = []
+  if (nextLike) {
+    extraArgs = ['--', '-p', String(port), '-H', '127.0.0.1']
+  }
+
+  switch (pm) {
+    case 'pnpm':
+      return { command: 'pnpm', args: ['run', 'start', ...extraArgs], env }
+    case 'yarn':
+      return { command: 'yarn', args: ['start', ...extraArgs.slice(1)], env }
+    case 'bun':
+      return { command: 'bun', args: ['run', 'start', ...extraArgs], env }
+    default:
+      return { command: 'npm', args: ['run', 'start', ...extraArgs], env }
+  }
+}
+
+function serveScriptCommand(pm, pkg, port) {
+  const env = commonServerEnv(port)
+
+  switch (pm) {
+    case 'pnpm':
+      return { command: 'pnpm', args: ['run', 'serve'], env }
+    case 'yarn':
+      return { command: 'yarn', args: ['serve'], env }
+    case 'bun':
+      return { command: 'bun', args: ['run', 'serve'], env }
+    default:
+      return { command: 'npm', args: ['run', 'serve'], env }
+  }
+}
+
+function staticServeCommand(port, relativeDir) {
+  return {
+    command: 'npx',
+    args: ['serve@14', '-l', `tcp://127.0.0.1:${port}`, '-n', relativeDir],
+    env: commonServerEnv(port),
+  }
+}
+
+export async function resolveServeCommand(pm, pkg, port, appRoot) {
+  if (pkg.scripts?.preview) {
+    return previewCommand(pm, pkg, port)
+  }
+
+  if (pkg.scripts?.start && pkg.scripts?.build) {
+    return startCommand(pm, pkg, port)
+  }
+
+  if (pkg.scripts?.serve) {
+    return serveScriptCommand(pm, pkg, port)
+  }
+
+  for (const dir of ['dist', 'build', 'out']) {
+    if (await exists(join(appRoot, dir))) {
+      return staticServeCommand(port, dir)
+    }
+  }
+
+  if (await exists(join(appRoot, '.next')) && pkg.scripts?.start) {
+    return startCommand(pm, pkg, port)
+  }
+
+  return null
+}
+
 export function devCommand(pm, pkg, port) {
   const devScript = pkg.scripts?.dev ?? ''
-  const viteLike = /vite|next|astro|webpack/.test(devScript)
-  const portArgs = viteLike
-    ? ['--', '--host', '127.0.0.1', '--port', String(port)]
-  : []
+  const viteLike = /vite|astro|webpack/.test(devScript)
+  const nextLike = isNextScript(devScript)
+  const env = commonServerEnv(port)
+
+  let portArgs = []
+  if (viteLike) {
+    portArgs = ['--', '--host', '127.0.0.1', '--port', String(port)]
+  } else if (nextLike) {
+    portArgs = ['--', '-p', String(port), '-H', '127.0.0.1']
+  }
 
   switch (pm) {
     case 'pnpm':
       return {
         command: 'pnpm',
         args: pkg.scripts?.dev ? ['run', 'dev', ...portArgs] : ['run', 'start'],
-        env: viteLike ? {} : { PORT: String(port), BROWSER: 'none' },
+        env,
       }
     case 'yarn':
       return {
@@ -134,21 +270,23 @@ export function devCommand(pm, pkg, port) {
         args: pkg.scripts?.dev
           ? viteLike
             ? ['dev', '--host', '127.0.0.1', '--port', String(port)]
-            : ['dev']
+            : nextLike
+              ? ['dev', '-p', String(port), '-H', '127.0.0.1']
+              : ['dev']
           : ['start'],
-        env: viteLike ? {} : { PORT: String(port), BROWSER: 'none' },
+        env,
       }
     case 'bun':
       return {
         command: 'bun',
         args: pkg.scripts?.dev ? ['run', 'dev', ...portArgs] : ['run', 'start'],
-        env: viteLike ? {} : { PORT: String(port), BROWSER: 'none' },
+        env,
       }
     default:
       return {
         command: 'npm',
         args: pkg.scripts?.dev ? ['run', 'dev', ...portArgs] : ['run', 'start'],
-        env: viteLike ? {} : { PORT: String(port), BROWSER: 'none' },
+        env,
       }
   }
 }

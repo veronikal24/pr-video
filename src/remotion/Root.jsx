@@ -9,7 +9,7 @@ import {
 } from './constants'
 
 export function RemotionRoot() {
-  const durationInFrames = getVideoDurationInFrames(defaultScript.slides.length)
+  const durationInFrames = getVideoDurationInFrames(defaultScript.slides)
 
   return (
     <Composition
@@ -21,7 +21,7 @@ export function RemotionRoot() {
       height={COMPOSITION_HEIGHT}
       defaultProps={{ script: defaultScript }}
       calculateMetadata={({ props }) => ({
-        durationInFrames: getVideoDurationInFrames(props.script?.slides?.length ?? 1),
+        durationInFrames: getVideoDurationInFrames(props.script?.slides ?? []),
       })}
     />
   )

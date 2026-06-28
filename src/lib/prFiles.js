@@ -16,6 +16,12 @@ export function isReactComponentFile(filename) {
   return isComponentFile(filename) && /\.(tsx|jsx)$/i.test(filename)
 }
 
+export function isStyleFile(filename) {
+  if (!/\.(css|scss|sass|less)$/i.test(filename)) return false
+  if (SKIP_PATTERNS.test(filename)) return false
+  return true
+}
+
 export function fileDisplayName(filename) {
   return filename.split('/').pop()
 }

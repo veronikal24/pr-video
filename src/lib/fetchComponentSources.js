@@ -1,4 +1,4 @@
-import { isReactComponentFile } from './prFiles'
+import { isReactComponentFile, isStyleFile } from './prFiles'
 
 function githubHeaders(token) {
   const headers = { Accept: 'application/vnd.github+json' }
@@ -26,19 +26,36 @@ async function fetchRawFile(owner, repo, path, ref, token) {
   return new TextDecoder('utf-8').decode(bytes)
 }
 
-export async function fetchComponentSources(pr, limit = 4) {
-  const token = import.meta.env.VITE_GITHUB_TOKEN
-  const components = (pr.files ?? []).filter((f) => isReactComponentFile(f.filename)).slice(0, limit)
-
-  const sources = []
-  for (const file of components) {
+async function loadFiles(pr, files, token) {
+  const loaded = []
+  for (const file of files) {
     try {
       const source = await fetchRawFile(pr.owner, pr.repoName, file.filename, pr.headRef, token)
-      sources.push({ ...file, source })
+      loaded.push({ ...file, source })
     } catch (err) {
-      sources.push({ ...file, source: null, loadError: err.message })
+      loaded.push({ ...file, source: null, loadError: err.message })
     }
   }
+  return loaded
+}
 
-  return sources
+export async function fetchUISources(pr, { componentLimit = 6, styleLimit = 4 } = {}) {
+  const token = import.meta.env.VITE_GITHUB_TOKEN
+  const components = (pr.files ?? [])
+    .filter((f) => isReactComponentFile(f.filename))
+    .slice(0, componentLimit)
+  const styles = (pr.files ?? [])
+    .filter((f) => isStyleFile(f.filename))
+    .slice(0, styleLimit)
+
+  const componentSources = await loadFiles(pr, components, token)
+  const styleSources = await loadFiles(pr, styles, token)
+
+  return { componentSources, styleSources }
+}
+
+/** @deprecated use fetchUISources */
+export async function fetchComponentSources(pr, limit = 6) {
+  const { componentSources } = await fetchUISources(pr, { componentLimit: limit, styleLimit: 0 })
+  return componentSources
 }
