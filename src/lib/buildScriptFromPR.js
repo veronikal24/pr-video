@@ -4,16 +4,11 @@ import {
   getEstimatedDurationSec,
 } from '../remotion/constants'
 import {
-  fileDisplayName,
   isUIFile,
-  pickHighlightLines,
-  summarizePatch,
 } from './prFiles'
-import { prepareComponentPreview } from './prepareComponentPreview'
+import { extractPRImages } from './extractPRImages'
 
 const SKIP_TITLE_PATTERNS = /^(fix|chore|docs|test|ci|build)(\(|:|\s)/i
-const MAX_COMPONENT_SLIDES = 6
-const MAX_STYLE_SLIDES = 4
 const MAX_SCREENSHOT_SLIDES = 3
 
 function stripMarkdown(text) {
@@ -32,11 +27,20 @@ function truncate(text, max) {
   return `${text.slice(0, max - 1).trim()}…`
 }
 
-function buildInjectedCss(styleSources) {
-  return styleSources
-    .filter((s) => s.source)
-    .map((s) => `/* ${s.filename} */\n${s.source}`)
-    .join('\n\n')
+function buildLinkedInCopy(pr) {
+  const bodyText = stripMarkdown(pr.body)
+  const intro = 'Excited to share a new update we just shipped.'
+  const summary = bodyText
+    ? 'The focus here was on making the experience simpler, smoother, and more polished for everyday use.'
+    : 'A small product update that makes the experience feel clearer and easier to use.'
+  const closer = 'Small improvements add up, and I’m looking forward to feedback.'
+
+  return {
+    intro,
+    summary: truncate(summary, 260),
+    closer,
+    caption: `${intro}\n\n${truncate(summary, 260)}\n\n${closer}`,
+  }
 }
 
 function inferTone(pr) {
@@ -46,24 +50,15 @@ function inferTone(pr) {
   return 'informational'
 }
 
-function inferConfidence(pr, componentCount, styleCount, hasScreenshots) {
+function inferConfidence(pr, hasScreenshots, hasSummary) {
   if (SKIP_TITLE_PATTERNS.test(pr.title)) return 0.25
   if (hasScreenshots) return 0.9
-  if (componentCount > 0) return 0.85
-  if (styleCount > 0) return 0.7
-  return 0.35
+  if (hasSummary) return 0.8
+  return 0.7
 }
 
-function inferSkipReason(componentCount, styleCount, hasScreenshots) {
-  if (hasScreenshots || componentCount > 0 || styleCount > 0) return null
-  return 'No React or CSS files changed in this PR'
-}
-
-function buildHashtags(pr) {
-  const [owner] = pr.repo.split('/')
-  const titleWord = pr.title.split(/\s+/).find((w) => w.length > 4)?.toLowerCase()
-  const tags = ['opensource', owner?.toLowerCase(), 'devtools']
-  if (titleWord) tags.push(titleWord.replace(/[^a-z0-9]/gi, ''))
+function buildHashtags() {
+  const tags = ['buildinpublic', 'product', 'design', 'ux']
   return [...new Set(tags.filter(Boolean))].slice(0, 4)
 }
 
@@ -82,88 +77,28 @@ function slidesFromScreenshots(screenshots, appUrl) {
   }))
 }
 
-function slideFromComponent(comp, index, injectedCss, useCodeDiff) {
-  if (useCodeDiff) {
-    return slideFromCodeFile(
-      comp,
-      index,
-      comp.status === 'added' ? 'New component' : 'Updated component'
-    )
-  }
-
-  const prepared = prepareComponentPreview(comp.source, comp.filename)
-  const name = fileDisplayName(comp.filename)
-
-  return {
-    id: `component-${index}`,
-    tag: comp.status === 'added' ? 'New component' : 'Updated component',
-    headline: name,
-    body: `${comp.filename} · ${summarizePatch(comp.patch)}`,
-    visual: {
-      type: 'component-preview',
-      filename: comp.filename,
-      previewCode: prepared.previewCode,
-      canPreview: prepared.canPreview,
-      componentName: prepared.componentName,
-      previewError: prepared.error,
-      injectedCss,
-      highlightLines: pickHighlightLines(comp.patch),
-      status: comp.status,
-      patch: comp.patch,
-    },
-  }
-}
-
-function slideFromCodeFile(file, index, tag) {
-  return {
-    id: `code-${index}`,
-    tag,
-    headline: fileDisplayName(file.filename),
-    body: `${file.filename} · ${summarizePatch(file.patch)}`,
-    visual: {
-      type: 'code-change',
-      filename: file.filename,
-      highlightLines: pickHighlightLines(file.patch, 18),
-      status: file.status,
-      patch: file.patch,
-    },
-  }
-}
-
-function slideFromStyle(file, index) {
-  const tag =
-    file.status === 'added'
-      ? 'New styles'
-      : file.status === 'removed'
-        ? 'Removed styles'
-        : 'Style changes'
-  return slideFromCodeFile(file, index, tag)
-}
-
 function buildSlides(
   pr,
-  { componentSources, styleSources, screenshots = [], appUrl = null }
+  { screenshots = [], appUrl = null }
 ) {
+  const linkedinCopy = buildLinkedInCopy(pr)
   const slides = []
   const bodyText = stripMarkdown(pr.body)
-  const heroBody =
-    truncate(bodyText, 160) ||
-    `PR #${pr.number} by @${pr.author} · ${pr.repo}`
   const hasSummarySlide = bodyText.length > 80
 
   slides.push({
     id: 'hero',
-    tag: 'Release',
-    headline: pr.title,
-    body: heroBody,
+    tag: 'LinkedIn post',
+    headline: linkedinCopy.intro,
+    body: linkedinCopy.summary,
     visual: { type: 'hero' },
   })
 
   if (hasSummarySlide) {
     slides.push({
       id: 'summary',
-      tag: 'Overview',
-      headline: "What's changing",
+      tag: 'Why it matters',
+      headline: 'A quick note for your network',
       body: truncate(bodyText, 280),
       visual: { type: 'summary' },
     })
@@ -171,51 +106,6 @@ function buildSlides(
 
   if (screenshots.length > 0) {
     slides.push(...slidesFromScreenshots(screenshots, appUrl))
-  }
-
-  const useCodeDiff = screenshots.length > 0
-  const injectedCss = buildInjectedCss(styleSources)
-
-  const components = componentSources.slice(0, MAX_COMPONENT_SLIDES)
-  for (const [i, comp] of components.entries()) {
-    if (comp.source && !useCodeDiff) {
-      slides.push(slideFromComponent(comp, i, injectedCss, false))
-    } else {
-      slides.push(
-        slideFromComponent(comp, i, injectedCss, true)
-      )
-    }
-  }
-
-  const styles = styleSources.slice(0, MAX_STYLE_SLIDES)
-  for (const [i, file] of styles.entries()) {
-    slides.push(slideFromStyle(file, i))
-  }
-
-  const needsFallback = !slides.some(
-    (s) =>
-      s.visual?.type === 'app-screenshot' ||
-      s.visual?.type === 'component-preview' ||
-      (s.visual?.type === 'code-change' && s.id !== 'fallback')
-  )
-
-  if (needsFallback) {
-    slides.push({
-      id: 'fallback',
-      tag: 'Tip',
-      headline: 'No UI files in this PR',
-      body: 'Slides are built from changed React components and CSS. Try a PR that touches .tsx, .jsx, or .css files.',
-      visual: {
-        type: 'code-change',
-        filename: 'src/example.tsx',
-        highlightLines: [
-          { text: 'export function Feature() {', type: 'add' },
-          { text: '  return <Card title="New feature" />', type: 'add' },
-          { text: '}', type: 'add' },
-        ],
-        status: 'added',
-      },
-    })
   }
 
   return { slides, hasSummarySlide, screenshotCount: screenshots.length }
@@ -233,13 +123,21 @@ export function buildScriptFromPR(
     captureError = null,
   } = {}
 ) {
-  const uiFiles = (pr.files ?? []).filter(isUIFile)
-  const loadedComponents = componentSources.filter((c) => c.source)
+  // Fall back to images embedded in the PR body when no live screenshots were captured
+  if (screenshots.length === 0 && pr.body && pr.body !== '(no description)') {
+    const prBodyImages = extractPRImages(pr.body)
+    if (prBodyImages.length > 0) {
+      screenshots = prBodyImages.map((url, i) => ({
+        url,
+        label: i === 0 ? 'PR screenshot' : `Screenshot ${i + 1}`,
+      }))
+      captureMode = captureMode ?? 'pr-body'
+    }
+  }
+
   const hasScreenshots = screenshots.length > 0
   const prMetrics = computePrMetrics(pr)
   const { slides: rawSlides, hasSummarySlide, screenshotCount } = buildSlides(pr, {
-    componentSources,
-    styleSources,
     screenshots,
     appUrl,
   })
@@ -250,9 +148,10 @@ export function buildScriptFromPR(
   })
 
   const tone = inferTone(pr)
+  const linkedinCopy = buildLinkedInCopy(pr)
 
   return {
-    hook: pr.title,
+    hook: linkedinCopy.intro,
     slides,
     pr: {
       repo: pr.repo,
@@ -270,27 +169,18 @@ export function buildScriptFromPR(
     componentSources,
     styleSources,
     changedFiles: pr.files ?? [],
-    uiFileCount: uiFiles.length,
-    componentCount: loadedComponents.length,
-    styleCount: styleSources.length,
+    uiFileCount: (pr.files ?? []).filter(isUIFile).length,
+    componentCount: 0,
+    styleCount: 0,
     captureMode,
     captureJobId,
     captureError,
     hasScreenshots,
     appUrl: appUrl ?? pr.previewUrl ?? null,
-    caption: `${pr.title} — ${pr.repo} PR #${pr.number} by @${pr.author}`,
-    hashtags: buildHashtags(pr),
+    caption: linkedinCopy.caption,
+    hashtags: buildHashtags(),
     tone,
-    confidence: inferConfidence(
-      pr,
-      loadedComponents.length,
-      styleSources.length,
-      hasScreenshots
-    ),
-    skip_reason: inferSkipReason(
-      loadedComponents.length,
-      styleSources.length,
-      hasScreenshots
-    ),
+    confidence: inferConfidence(pr, hasScreenshots, hasSummarySlide),
+    skip_reason: null,
   }
 }

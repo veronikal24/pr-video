@@ -3,7 +3,7 @@ export const SLIDE_DURATION_FRAMES = 4 * PR_VIDEO_FPS
 export const COMPOSITION_WIDTH = 1920
 export const COMPOSITION_HEIGHT = 1080
 export const MIN_VIDEO_SECONDS = 8
-export const MAX_VIDEO_SECONDS = 90
+export const MAX_VIDEO_SECONDS = 20
 
 function clamp(n, min, max) {
   return Math.min(Math.max(n, min), max)

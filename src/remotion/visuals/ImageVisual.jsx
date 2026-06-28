@@ -1,4 +1,4 @@
-import { Img, interpolate, spring } from 'remotion'
+import { interpolate, spring } from 'remotion'
 
 const CHROME_HEIGHT = { sm: 36, lg: 52 }
 const FPS = 30
@@ -62,6 +62,61 @@ function BrowserChrome({ children, size = 'sm', frame = 0, animated = false }) {
   )
 }
 
+function Screenshot3DScene({ children, frame = 0, durationFrames = 150, animated = false }) {
+  const hover = animated
+    ? interpolate(frame, [0, durationFrames], [0, 1], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      })
+    : 0
+
+  const rotateY = animated ? interpolate(hover, [0, 1], [-10, 8]) : -6
+  const rotateX = animated ? interpolate(hover, [0, 1], [7, 3]) : 6
+  const translateY = animated ? interpolate(hover, [0, 1], [18, -8]) : 0
+  const translateZ = animated ? interpolate(hover, [0, 1], [0, 24]) : 0
+  const shadowStrength = animated ? interpolate(hover, [0, 1], [0.28, 0.46]) : 0.34
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        perspective: '1800px',
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      <div
+        style={{
+          width: '88%',
+          height: '88%',
+          transformStyle: 'preserve-3d',
+          transform: `translateY(${translateY}px) translateZ(${translateZ}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
+          filter: `drop-shadow(0 34px 56px rgba(0, 0, 0, ${shadowStrength}))`,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: '-8% -6% -10%',
+            borderRadius: 32,
+            background:
+              'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 32%), radial-gradient(circle at 80% 15%, rgba(175,169,236,0.26), transparent 28%), linear-gradient(160deg, rgba(20,24,34,0.45), rgba(7,8,12,0.16))',
+            transform: 'translateZ(-42px)',
+            opacity: 0.9,
+            filter: 'blur(12px)',
+          }}
+        />
+        <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d' }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ImageVisual({
   imageUrl,
   alt,
@@ -82,41 +137,56 @@ export function ImageVisual({
 
   if (!imageUrl) {
     return (
+      <Screenshot3DScene frame={frame} durationFrames={durationFrames} animated={animated}>
+        <BrowserChrome size={size} frame={frame} animated={animated}>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#666',
+              fontSize: size === 'lg' ? 24 : 14,
+            }}
+          >
+            No screenshot attached
+          </div>
+        </BrowserChrome>
+      </Screenshot3DScene>
+    )
+  }
+
+  return (
+    <Screenshot3DScene frame={frame} durationFrames={durationFrames} animated={animated}>
       <BrowserChrome size={size} frame={frame} animated={animated}>
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#666',
-            fontSize: size === 'lg' ? 24 : 14,
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 18%, rgba(0,0,0,0.08) 100%)',
+            pointerEvents: 'none',
+            zIndex: 2,
           }}
-        >
-          No screenshot attached
-        </div>
+        />
+        <img
+          src={imageUrl}
+          alt={alt ?? 'Feature screenshot'}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'top center',
+            opacity: Math.max(0, imgOpacity),
+            transform: animated ? `scale(${scale}) translateZ(0)` : 'translateZ(0)',
+            transformOrigin: 'top center',
+            willChange: 'transform',
+          }}
+        />
       </BrowserChrome>
-    )
-  }
-
-  return (
-    <BrowserChrome size={size} frame={frame} animated={animated}>
-      <Img
-        src={imageUrl}
-        alt={alt ?? 'Feature screenshot'}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'top center',
-          opacity: Math.max(0, imgOpacity),
-          transform: animated ? `scale(${scale})` : undefined,
-          transformOrigin: 'top center',
-        }}
-      />
-    </BrowserChrome>
+    </Screenshot3DScene>
   )
 }

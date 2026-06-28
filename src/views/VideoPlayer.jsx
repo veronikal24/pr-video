@@ -79,7 +79,7 @@ export default function VideoPlayer({ script }) {
 
         {!exportUrl && !exporting && (
           <p className="render-hint">
-            Export renders an animated Remotion video — app screenshots plus code diffs from the PR.
+            Export renders an animated Remotion video — a LinkedIn-style narrative with optional app screenshots.
           </p>
         )}
       </div>
@@ -95,4 +95,4 @@ export default function VideoPlayer({ script }) {
     </div>
   )
 }
-
+

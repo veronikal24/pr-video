@@ -93,7 +93,7 @@ export default function ScriptReview({ prData, onApproved }) {
 
       {script.captureError && (
         <div className="low-confidence-banner">
-          Could not capture app UI — showing component previews / diffs instead.{' '}
+          Could not capture app UI — showing the post-style version instead.{' '}
           <button
             type="button"
             className="pr-link"
@@ -151,7 +151,7 @@ export default function ScriptReview({ prData, onApproved }) {
           </div>
         )}
         <p className="meta-hint">
-          Every video includes app screenshots plus animated code diff slides. Export uses Remotion.
+          Every video is written like a LinkedIn post, with optional app screenshots and no code diff slides.
         </p>
       </div>
 
@@ -243,4 +243,4 @@ export default function ScriptReview({ prData, onApproved }) {
     </div>
   )
 }
-
+
