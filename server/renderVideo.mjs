@@ -7,16 +7,21 @@ import { resolveScriptForRender } from './resolveScriptForRender.mjs'
 
 const execFile = promisify(execFileCb)
 
-export async function renderVideo(script, _apiPort) {
+export async function renderVideo(script, apiPort) {
   const renderId = `render-${Date.now()}`
   const renderDir = join(RENDERS_DIR, renderId)
   await mkdir(renderDir, { recursive: true })
 
+  const resolvedScript = resolveScriptForRender(script, apiPort)
   const propsPath = join(renderDir, 'props.json')
-  const resolvedScript = resolveScriptForRender(script, _apiPort)
   await writeFile(propsPath, JSON.stringify({ script: resolvedScript }))
 
   const outPath = join(renderDir, 'video.mp4')
+
+  console.log(
+    `[render] Remotion: ${resolvedScript.slides?.length ?? 0} slides`,
+    resolvedScript.hasScreenshots ? '(with screenshots + code)' : ''
+  )
 
   await execFile(
     'npx',
@@ -35,6 +40,8 @@ export async function renderVideo(script, _apiPort) {
       env: { ...process.env, NODE_ENV: 'production' },
     }
   )
+
+  console.log(`[render] Done: ${outPath}`)
 
   return {
     renderId,
