@@ -1,29 +1,53 @@
 import { capturePagePreview, resolveAppUrl } from './capturePagePreview'
 import { captureFromLocalRepo, checkLocalServer } from './captureLocalApp'
+import { captureAppScreenshots } from './captureAppScreenshot'
 
 export async function captureUIScreenshots(pr) {
-  const apiUp = await checkLocalServer()
-  if (!apiUp) {
-    return {
-      screenshots: [],
-      captureMode: null,
-      appUrl: null,
-      jobId: null,
-      error: 'Local API server not running — run npm run dev',
-    }
-  }
-
   const previewUrl = resolveAppUrl(null, pr)
+  const apiUp = await checkLocalServer()
 
   try {
     if (previewUrl) {
-      const result = await capturePagePreview(previewUrl)
+      if (apiUp) {
+        try {
+          const result = await capturePagePreview(previewUrl)
+          if (result.screenshots?.length) {
+            return {
+              screenshots: result.screenshots,
+              captureMode: 'preview',
+              appUrl: result.appUrl ?? previewUrl,
+              jobId: result.jobId ?? null,
+              error: null,
+            }
+          }
+        } catch (err) {
+          console.warn('[captureUIScreenshots] Local preview screenshot failed:', err.message)
+        }
+      }
+
+      try {
+        const { appUrl, screenshots } = await captureAppScreenshots(previewUrl)
+        if (screenshots?.length) {
+          return {
+            screenshots,
+            captureMode: 'preview-remote',
+            appUrl,
+            jobId: null,
+            error: null,
+          }
+        }
+      } catch (err) {
+        console.warn('[captureUIScreenshots] Remote preview screenshot failed:', err.message)
+      }
+    }
+
+    if (!apiUp) {
       return {
-        screenshots: result.screenshots ?? [],
-        captureMode: 'preview',
-        appUrl: result.appUrl ?? previewUrl,
-        jobId: result.jobId ?? null,
-        error: null,
+        screenshots: [],
+        captureMode: null,
+        appUrl: previewUrl,
+        jobId: null,
+        error: 'Run npm run dev so the server can capture app UI (or add a deploy preview URL to the PR)',
       }
     }
 
